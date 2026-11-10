@@ -9,6 +9,7 @@
 #include <numeric>
 #include <cmath> 
 #include <iomanip>
+#include "helper_functions.h"
 
 #ifdef _WIN32
     #include <conio.h>
@@ -23,23 +24,6 @@ void clearScreenWin() {
         system("cls");
     #endif
 }
-
-struct Student {
-    std::string name;
-    double score;
-};
-
-std::vector<Student> students;
-
-std::vector<double> scores;
-int count = 0;
-double mean = 0.0;
-double variance_sum = 0.0;
-double std_dev = 0.0;
-double min_score = 0.0;
-double max_score = 0.0;
-double p50 = 0.0;
-
 
 void addStudent() {
     std::string name;
