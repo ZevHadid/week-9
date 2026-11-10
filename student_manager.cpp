@@ -118,33 +118,39 @@ int main() {
     };
 
     int choice = runMenu(menuItems);
-
     std::cout << "\nYou selected: " << menuItems[choice] << "\n";
 
-    switch (choice) {
-        case 0:
-            addStudent();
-            break;
-        case 1:
-            std::cout << "Remove Student functionality not implemented yet.\n";
-            break;
-        case 2:
-            std::cout << "View All functionality not implemented yet.\n";
-            break;
-        case 3:
-            std::cout << "Search by Name functionality not implemented yet.\n";
-            break;
-        case 4:
-            std::cout << "Sort by Score functionality not implemented yet.\n";
-            break;
-        case 5:
-            std::cout << "Statistics functionality not implemented yet.\n";
-            break;
-        case 6:
-            std::cout << "Exiting the program. Goodbye!\n";
-            break;
-        default:
-            std::cout << "Invalid choice.\n";
+    bool running = true;
+    while (running) {
+        int choice = runMenu(menuItems);
+        std::cout << "\nYou selected: " << menuItems[choice] << "\n";
+
+        switch (choice) {
+            case 0:
+                addStudent();
+                break;
+            case 1:
+                std::cout << "Remove Student functionality not implemented yet.\n";
+                break;
+            case 2:
+                std::cout << "View All functionality not implemented yet.\n";
+                break;
+            case 3:
+                std::cout << "Search by Name functionality not implemented yet.\n";
+                break;
+            case 4:
+                std::cout << "Sort by Score functionality not implemented yet.\n";
+                break;
+            case 5:
+                std::cout << "Statistics functionality not implemented yet.\n";
+                break;
+            case 6:
+                std::cout << "Exiting the program. Goodbye!\n";
+                running = false;
+                break;
+            default:
+                std::cout << "Invalid choice.\n";
+        }
     }
 
     return 0;
