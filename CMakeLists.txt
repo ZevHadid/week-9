@@ -7,5 +7,5 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(FTXUI-main)
 
-add_executable(app ./test.cpp)
+add_executable(app ./test.cpp ./helper_functions.cpp)
 target_link_libraries(app PRIVATE ftxui::ftxui)

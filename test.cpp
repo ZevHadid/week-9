@@ -108,6 +108,104 @@ Element studentTable(const std::vector<Student>& list) {
     return vbox(std::move(rows));
 }
 
+bool checkNumber(const std::string& str) {
+    return std::any_of(str.begin(), str.end(), [](unsigned char c) {
+        return std::isdigit(c);
+    });
+}
+
+// ------------------------------------------------------------- charts ----
+
+// One horizontal bar: label | gauge | value
+Element barRow(const std::string& label, double frac, const std::string& value, Color c,
+               int label_width = 16) {
+    frac = std::clamp(frac, 0.0, 1.0);
+    return hbox({
+        text(label) | size(WIDTH, EQUAL, label_width),
+        gauge(static_cast<float>(frac)) | color(c) | flex,
+        text(" " + value) | size(WIDTH, EQUAL, 9),
+    });
+}
+
+// Min ──━━━●◆━━── Max ruler showing mean, median and a +/-1 std dev band.
+Element rangeRuler(const Stats& st) {
+    const int W = 48;
+    double span = st.max - st.min;
+    auto pos = [&](double v) {
+        if (span <= 0.0) return 0;
+        int p = static_cast<int>(std::lround((v - st.min) / span * (W - 1)));
+        return std::clamp(p, 0, W - 1);
+    };
+
+    std::vector<std::string> cells(W, "─");
+    int a = pos(std::max(st.min, st.mean - st.std_dev));
+    int b = pos(std::min(st.max, st.mean + st.std_dev));
+    for (int i = a; i <= b; ++i) cells[i] = "━";
+    cells[pos(st.median)] = "◆";
+    cells[pos(st.mean)] = (pos(st.mean) == pos(st.median)) ? "◉" : "●";
+
+    std::string line;
+    for (const auto& c : cells) line += c;
+
+    return vbox({
+        hbox(text(fmt(st.min)), text(" "), text(line) | color(Color::Cyan), text(" "),
+             text(fmt(st.max))),
+        text("● mean   ◆ median   ◉ both   ━ within 1 std dev of the mean") | dim,
+    });
+}
+
+// Every student's score as a horizontal bar, highest first.
+Element scoreBarsChart(const Stats& st) {
+    std::vector<int> order = sortedStudentsByScore();
+    double lo = std::min(0.0, st.min);
+    double hi = std::max(st.max, lo + 1e-9);
+
+    Elements rows;
+    for (int idx : order) {
+        const Student& s = students[idx];
+        Color c = s.score >= st.mean ? Color::Green : Color::Yellow;
+        rows.push_back(barRow(s.name, (s.score - lo) / (hi - lo), fmt(s.score), c));
+    }
+
+    return vbox({
+        vbox(std::move(rows)) | vscroll_indicator | yframe | flex,
+        separator(),
+        text("Green: at or above the mean (" + fmt(st.mean) + ")   Yellow: below the mean") | dim,
+    });
+}
+
+// Histogram: how many students fall in each score range.
+Element distributionChart(const Stats& st) {
+    size_t n = students.size();
+    int bins = (st.max == st.min)
+                   ? 1
+                   : std::clamp(static_cast<int>(std::ceil(std::sqrt(static_cast<double>(n)))), 3, 10);
+    double width = (st.max - st.min) / bins;
+
+    std::vector<int> counts(bins, 0);
+    for (const auto& s : students) {
+        int b = (bins == 1) ? 0 : std::min(bins - 1, static_cast<int>((s.score - st.min) / width));
+        counts[b]++;
+    }
+    int max_count = *std::max_element(counts.begin(), counts.end());
+
+    Elements rows;
+    for (int b = 0; b < bins; ++b) {
+        std::string label = (bins == 1) ? fmt(st.min, 1)
+                                        : fmt(st.min + b * width, 1) + " - " + fmt(st.min + (b + 1) * width, 1);
+        rows.push_back(barRow(label, static_cast<double>(counts[b]) / max_count,
+                              std::to_string(counts[b]), Color::Cyan, 20));
+    }
+
+    return vbox({
+        vbox(std::move(rows)) | flex,
+        separator(),
+        text("Bars show the number of students per score range (" + std::to_string(bins) +
+             (bins == 1 ? " range)" : " ranges)")) |
+            dim,
+    });
+}
+
 // Common window chrome used by every page.
 Element frame(const std::string& title, Element body, const std::string& hint) {
     return vbox({
@@ -150,19 +248,28 @@ int main() {
             size_t pos = 0;
             std::string raw = trim(score_input);
             score = std::stod(raw, &pos);
-            if (pos != raw.size() || !std::isfinite(score)) throw std::invalid_argument("bad");
+            if (pos != raw.size() || !std::isfinite(score) || score > 100.0) {
+                throw std::invalid_argument("bad");
+            }
         } catch (...) {
-            add_status = "Score must be a valid number.";
+            add_status = "Score must be a valid number less than or equal to 100.";
             add_ok = false;
             return;
         }
 
-        students.push_back({name, score});
-        add_status = "Added " + name + " with score " + fmt(score) + ".";
-        add_ok = true;
-        name_input.clear();
-        score_input.clear();
-        name_in->TakeFocus();  // ready for the next entry
+
+        if (checkNumber(name) == true){
+            add_status = "Numbered values aren't allowed in the name field!";
+            add_ok = false;
+            return;
+        } else {
+            students.push_back({name, score});
+            add_status = "Added " + name + " with score " + fmt(score) + ".";
+            add_ok = true;
+            name_input.clear();
+            score_input.clear();
+            name_in->TakeFocus();  // ready for the next entry
+        }
     };
 
     InputOption score_opt;
@@ -291,27 +398,43 @@ int main() {
     });
 
     // ---------------------------------------------------- Statistics ------
+    std::vector<std::string> stats_views = {"Summary", "Score Bars", "Distribution"};
+    int stats_view = 0;
+    auto stats_toggle = Toggle(&stats_views, &stats_view);
     auto stats_back = makeBackButton();
-    auto stats_page = Renderer(stats_back, [&] {
+    auto stats_container = Container::Vertical({stats_toggle, stats_back});
+
+    auto stats_page = Renderer(stats_container, [&] {
         Element body;
         if (students.empty()) {
             body = text("No data yet. Add some students first.") | dim;
         } else {
             Stats st = computeStats(students);
-            auto row = [](const std::string& label, const std::string& value) {
-                return hbox({text(label) | size(WIDTH, EQUAL, 26), text(value) | bold});
-            };
-            body = vbox({
-                row("Count:", std::to_string(st.count)),
-                row("Mean:", fmt(st.mean)),
-                row("Standard Deviation:", fmt(st.std_dev)),
-                row("Minimum Score:", fmt(st.min)),
-                row("Maximum Score:", fmt(st.max)),
-                row("50th Percentile (Median):", fmt(st.median)),
-            });
+            if (stats_view == 0) {
+                auto row = [](const std::string& label, const std::string& value) {
+                    return hbox({text(label) | size(WIDTH, EQUAL, 26), text(value) | bold});
+                };
+                body = vbox({
+                    row("Count:", std::to_string(st.count)),
+                    row("Mean:", fmt(st.mean)),
+                    row("Standard Deviation:", fmt(st.std_dev)),
+                    row("Minimum Score:", fmt(st.min)),
+                    row("Maximum Score:", fmt(st.max)),
+                    row("50th Percentile (Median):", fmt(st.median)),
+                    text(""),
+                    text("Score range") | bold,
+                    rangeRuler(st),
+                });
+            } else if (stats_view == 1) {
+                body = scoreBarsChart(st);
+            } else {
+                body = distributionChart(st);
+            }
         }
-        return frame("Statistics", vbox({body | flex, text(""), stats_back->Render()}),
-                     "Esc: back to menu");
+        return frame("Statistics",
+                     vbox({stats_toggle->Render() | hcenter, separator(), body | flex, text(""),
+                           stats_back->Render()}),
+                     "Left/Right: switch chart | Up/Down: move | Esc: back to menu");
     });
 
     // -------------------------------------------------------- Menu --------
@@ -342,7 +465,10 @@ int main() {
                 query_in->TakeFocus();
                 break;
             case 4: page = SORT; break;
-            case 5: page = STATS; break;
+            case 5:
+                stats_view = 0;
+                page = STATS;
+                break;
             case 6: screen.Exit(); break;
         }
     };
