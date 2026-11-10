@@ -1,5 +1,7 @@
 // Remember -lncurses flag when compiling in Linux/MacOS
 
+#include <ftxui/dom/elements.hpp>
+#include <ftxui/screen/screen.hpp>
 #include <iostream>
 #include <vector>
 #include <string>
