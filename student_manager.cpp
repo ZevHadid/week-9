@@ -11,10 +11,19 @@
     #include <ncurses.h>
 #endif
 
+// Helper function to clear screen on Windows
+void clearScreenWin() {
+    #ifdef _WIN32
+        system("cls");
+    #endif
+}
+
 struct Student {
     std::string name;
     int score;
 };
+
+std::vector<Student> students;
 
 void addStudent() {
     std::string name;
@@ -27,15 +36,14 @@ void addStudent() {
     std::cin.ignore();
 
     Student newStudent{name, score};
+    students.push_back(newStudent);
 
     std::cout << "Student added: " << newStudent.name << " with score " << newStudent.score << "\n";
 }
 
-// Helper function to clear screen on Windows
-void clearScreenWin() {
-    #ifdef _WIN32
-        system("cls");
-    #endif
+void displayStatics() {
+    std::cout << "Displaying statistics...\n";
+    
 }
 
 int runMenu(const std::vector<std::string>& options) {
@@ -142,7 +150,7 @@ int main() {
                 std::cout << "Sort by Score functionality not implemented yet.\n";
                 break;
             case 5:
-                std::cout << "Statistics functionality not implemented yet.\n";
+                displayStatics();
                 break;
             case 6:
                 std::cout << "Exiting the program. Goodbye!\n";
