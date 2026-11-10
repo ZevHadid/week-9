@@ -11,7 +11,6 @@
 // |  (Licensed under the [MIT License (https://github.com/blob/main/LICENSE)). |
 // |                                                                            |
 // |____________________________________________________________________________|
- 
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -28,10 +27,37 @@
 
 using namespace ftxui;
 
+// ---------------------------------------------------------------- data ----
+
 struct Student {
     std::string name;
     double score;
 };
+
+// Shared student list (global so the helper functions below can use it).
+std::vector<Student> students;
+
+// Returns the first student whose name matches exactly, or {"", -1.0} if none.
+Student findStudentNByName(std::string name) {
+    for (const auto& student : students) {
+        if (student.name == name) {
+            return student;
+        }
+    }
+    return {"", -1.0};
+}
+
+// Returns indices into `students`, ordered by score from highest to lowest.
+std::vector<int> sortedStudentsByScore() {
+    std::vector<int> indices(students.size());
+    std::iota(indices.begin(), indices.end(), 0);
+
+    std::sort(indices.begin(), indices.end(), [&](int a, int b) {
+        return students[a].score > students[b].score;
+    });
+
+    return indices;
+}
 
 struct Stats {
     size_t count = 0;
@@ -129,7 +155,6 @@ enum Page { MENU, ADD, REMOVE, VIEW, SEARCH, SORT, STATS };
 int main() {
     auto screen = ScreenInteractive::Fullscreen();
 
-    std::vector<Student> students;
     int page = MENU;
 
     auto goBack = [&] { page = MENU; };
@@ -243,20 +268,28 @@ int main() {
     auto search_container = Container::Vertical({query_in, search_back});
 
     auto search_page = Renderer(search_container, [&] {
-        std::vector<Student> matches;
-        std::string q = toLower(trim(query));
-        if (!q.empty()) {
-            for (const auto& s : students)
-                if (toLower(s.name).find(q) != std::string::npos) matches.push_back(s);
-        }
-
+        std::string q = trim(query);
         Element results;
-        if (q.empty())
-            results = text("Start typing to search.") | dim;
-        else if (matches.empty())
-            results = text("No matches.") | dim;
-        else
-            results = studentTable(matches);
+
+        if (q.empty()) {
+            results = text("Start typing a name to search.") | dim;
+        } else {
+            Student found = findStudentNByName(q);  // exact match via helper
+            if (!found.name.empty()) {  // sentinel is {"", -1.0}
+                results = vbox({text("Exact match:") | bold, studentTable({found})});
+            } else {
+                // No exact match: offer case-insensitive partial matches instead.
+                std::vector<Student> similar;
+                std::string lq = toLower(q);
+                for (const auto& s : students)
+                    if (toLower(s.name).find(lq) != std::string::npos) similar.push_back(s);
+
+                if (similar.empty())
+                    results = text("No student named \"" + q + "\".") | dim;
+                else
+                    results = vbox({text("No exact match. Similar names:") | dim, studentTable(similar)});
+            }
+        }
 
         return frame("Search by Name",
                      vbox({hbox(text("Search: "), query_in->Render() | flex), separator(),
@@ -272,10 +305,12 @@ int main() {
     auto sort_container = Container::Horizontal({flip_btn, sort_back});
 
     auto sort_page = Renderer(sort_container, [&] {
-        std::vector<Student> sorted = students;
-        std::stable_sort(sorted.begin(), sorted.end(), [&](const Student& a, const Student& b) {
-            return descending ? a.score > b.score : a.score < b.score;
-        });
+        std::vector<int> order = sortedStudentsByScore();  // highest first
+        if (!descending) std::reverse(order.begin(), order.end());
+
+        std::vector<Student> sorted;
+        sorted.reserve(order.size());
+        for (int idx : order) sorted.push_back(students[idx]);
         return frame("Sort by Score",
                      vbox({text(descending ? "Order: highest first" : "Order: lowest first") | bold,
                            separator(), studentTable(sorted) | vscroll_indicator | yframe | flex,
