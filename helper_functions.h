@@ -7,6 +7,7 @@
 struct Student {
     std::string name;
     double score;
+    std::string gender = "Male";   // "Male" or "Female"
 };
 
 // Global variables made available to other files
