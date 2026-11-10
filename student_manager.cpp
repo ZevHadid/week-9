@@ -1,10 +1,14 @@
 // Remember -lncurses flag when compiling in Linux/MacOS
 
+#include <ftxui/dom/elements.hpp>
+#include <ftxui/screen/screen.hpp>
 #include <iostream>
 #include <vector>
 #include <string>
+#include <algorithm>
+#include <numeric>
+#include <cmath> 
 #include <iomanip>
-#include <cctype>
 
 #ifdef _WIN32
     #include <conio.h>
@@ -22,14 +26,24 @@ void clearScreenWin() {
 
 struct Student {
     std::string name;
-    int score;
+    double score;
 };
 
 std::vector<Student> students;
 
+std::vector<double> scores;
+int count = 0;
+double mean = 0.0;
+double variance_sum = 0.0;
+double std_dev = 0.0;
+double min_score = 0.0;
+double max_score = 0.0;
+double p50 = 0.0;
+
+
 void addStudent() {
     std::string name;
-    int score;
+    double score;
 
     std::cout << "Enter student name: ";
     std::getline(std::cin, name);
@@ -39,12 +53,42 @@ void addStudent() {
 
     Student newStudent{name, score};
     students.push_back(newStudent);
+    scores.push_back(score);
+
+    count = static_cast<double>(scores.size());
+    mean = std::accumulate(scores.begin(), scores.end(), 0.0) / scores.size();
+
+    variance_sum = 0.0; 
+    for(double x : scores) {
+        variance_sum += std::pow(x - mean, 2);
+    }
+    
+    if (scores.size() > 1) {
+        std_dev = std::sqrt(variance_sum / (scores.size() - 1));
+    } else {
+        std_dev = 0.0; 
+    }
+
+    min_score = *std::min_element(scores.begin(), scores.end());
+    max_score = *std::max_element(scores.begin(), scores.end());
+
+    auto p50_it = scores.begin() + static_cast<size_t>(0.50 * (scores.size() - 1));
+    std::nth_element(scores.begin(), p50_it, scores.end());
+    p50 = *p50_it;
 
     std::cout << "Student added: " << newStudent.name << " with score " << newStudent.score << "\n";
 }
 
 void displayStatics() {
-    std::cout << "Displaying statistics...\n";
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Statistics:\n";
+    std::cout << "Count: " << count << "\n";
+    std::cout << "Mean: " << mean << "\n";
+    std::cout << "Standard Deviation: " << std_dev << "\n";
+    std::cout << "Minimum Score: " << min_score << "\n";
+    std::cout << "Maximum Score: " << max_score << "\n";
+    std::cout << "50th Percentile (Median): " << p50 << "\n";
+    std::cin.ignore();
     
 }
 
