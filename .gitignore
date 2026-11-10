@@ -1,17 +1,2 @@
-# Windows Executables & Libraries
 *.exe
-*.exe~
-*.dll
-
-# Linux / Unix Executables & Binaries
-*.out
-*.so
-*.a
-
-# Executables with no extension (use carefully or place in a build folder)
-# /bin/
-# /build/
-
-# Test binaries and coverage
-*.test
-*.app
+student_manager
