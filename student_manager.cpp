@@ -3,6 +3,8 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <iomanip>
+#include <cctype>
 
 #ifdef _WIN32
     #include <conio.h>
@@ -44,6 +46,41 @@ void addStudent() {
 void displayStatics() {
     std::cout << "Displaying statistics...\n";
     
+}
+
+// Reusable helper function to pause until the user types "Exit"
+void waitForExit() {
+    std::string exitStr;
+    while (true) {
+        std::cout << "\nType 'Exit' to return to menu: ";
+        std::getline(std::cin >> std::ws, exitStr);
+
+        for (char& c : exitStr) {
+            c = std::toupper(static_cast<unsigned char>(c));
+        }
+
+        if (exitStr == "EXIT") {
+            break;
+        }
+        
+        std::cout << "Invalid input. Please type 'Exit'.\n";
+    }
+}
+
+void displayAllStudents() {
+    if (students.empty()) {
+        std::cout << "No students to display.\n";
+        waitForExit(); // Prompts user to type 'Exit' before returning
+        return;
+    }
+
+    std::cout << std::left << std::setw(15) << "Name" << std::setw(10) << "Score" << std::endl;
+    std::cout << "--------------------\n";
+    for (const auto& student : students) {
+        std::cout << std::left << std::setw(15) << student.name << std::setw(10) << student.score << std::endl;
+    }
+
+    waitForExit(); // Prompts user to type 'Exit' before returning
 }
 
 int runMenu(const std::vector<std::string>& options) {
@@ -141,7 +178,7 @@ int main() {
                 std::cout << "Remove Student functionality not implemented yet.\n";
                 break;
             case 2:
-                std::cout << "View All functionality not implemented yet.\n";
+                displayAllStudents();
                 break;
             case 3:
                 std::cout << "Search by Name functionality not implemented yet.\n";
