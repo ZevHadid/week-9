@@ -16,6 +16,8 @@
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include "helper_functions.h"  // Student, students, findStudentNByName, sortedStudentsByScore
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -28,36 +30,6 @@
 using namespace ftxui;
 
 // ---------------------------------------------------------------- data ----
-
-struct Student {
-    std::string name;
-    double score;
-};
-
-// Shared student list (global so the helper functions below can use it).
-std::vector<Student> students;
-
-// Returns the first student whose name matches exactly, or {"", -1.0} if none.
-Student findStudentNByName(std::string name) {
-    for (const auto& student : students) {
-        if (student.name == name) {
-            return student;
-        }
-    }
-    return {"", -1.0};
-}
-
-// Returns indices into `students`, ordered by score from highest to lowest.
-std::vector<int> sortedStudentsByScore() {
-    std::vector<int> indices(students.size());
-    std::iota(indices.begin(), indices.end(), 0);
-
-    std::sort(indices.begin(), indices.end(), [&](int a, int b) {
-        return students[a].score > students[b].score;
-    });
-
-    return indices;
-}
 
 struct Stats {
     size_t count = 0;
