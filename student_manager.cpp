@@ -590,38 +590,62 @@ int main() {
     });
 
         // ------------------------------------------------------ Export ------
-    std::string export_name = "students", export_status;
+    std::string export_name = "students", export_dir, export_status;
     bool export_ok = true;
     std::vector<std::string> export_formats = {"CSV (.csv)", "Excel (.xlsx)"};
     int export_format = 0;
 
+    // Removes spaces and the quotes Windows adds with "Copy as path".
+    auto cleanPath = [](std::string s) {
+        s = trim(s);
+        if (s.size() >= 2 && ((s.front() == '"' && s.back() == '"') ||
+                              (s.front() == '\'' && s.back() == '\'')))
+            s = trim(s.substr(1, s.size() - 2));
+        return s;
+    };
+
     auto doExport = [&] {
+        namespace fs = std::filesystem;
+
         if (students.empty()) {
             export_status = "No students to export.";
             export_ok = false;
             return;
         }
-        std::string base = trim(export_name);
+        std::string base = cleanPath(export_name);
         if (base.empty()) {
             export_status = "File name cannot be empty.";
             export_ok = false;
             return;
         }
 
+        // Add the extension if the name doesn't already end in it.
         std::string ext = (export_format == 0) ? ".csv" : ".xlsx";
-        std::string path = base;
-        if (toLower(base).size() < ext.size() ||
-            toLower(base).compare(toLower(base).size() - ext.size(), ext.size(), ext) != 0)
-            path += ext;
+        fs::path file(base);
+        if (toLower(file.extension().string()) != ext) file += ext;
+
+        // Empty folder field = current folder (the previous behaviour).
+        std::string dir_text = cleanPath(export_dir);
+        fs::path target = file;
+        if (!dir_text.empty()) {
+            std::error_code ec;
+            fs::path dir(dir_text);
+            if (!fs::is_directory(dir, ec)) {
+                export_status = "Folder \"" + dir_text + "\" does not exist.";
+                export_ok = false;
+                return;
+            }
+            target = dir / file;  // an absolute file name overrides the folder
+        }
 
         std::string err;
-        bool ok = (export_format == 0) ? writeCsv(path, students, err)
-                                       : writeXlsx(path, students, err);
+        bool ok = (export_format == 0) ? writeCsv(target.string(), students, err)
+                                       : writeXlsx(target.string(), students, err);
         if (ok) {
             std::error_code ec;
-            std::string full = std::filesystem::absolute(path, ec).string();
+            fs::path full = fs::absolute(target, ec);
             export_status = "Exported " + std::to_string(students.size()) + " students to " +
-                            (ec ? path : full);
+                            (ec ? target.string() : full.string());
             export_ok = true;
         } else {
             export_status = err;
@@ -629,15 +653,17 @@ int main() {
         }
     };
 
-    InputOption export_name_opt;
-    export_name_opt.on_enter = doExport;
-    auto export_name_in = Input(&export_name, "file name", export_name_opt);
+    InputOption export_opt;
+    export_opt.on_enter = doExport;
+    auto export_name_in = Input(&export_name, "file name", export_opt);
+    auto export_dir_in = Input(&export_dir, "empty = current folder", export_opt);
     auto export_format_in = Toggle(&export_formats, &export_format);
     auto export_btn = Button("Export", doExport, ButtonOption::Animated());
     auto export_back = makeBackButton();
 
     auto export_form = Container::Vertical({
         export_name_in,
+        export_dir_in,
         export_format_in,
         Container::Horizontal({export_btn, export_back}),
     });
@@ -646,11 +672,12 @@ int main() {
         return frame("Export Students",
                      vbox({
                          hbox(text("File name: "), export_name_in->Render() | flex),
+                         hbox(text("Folder:    "), export_dir_in->Render() | flex),
                          hbox(text("Format:    "), export_format_in->Render()),
                          text(""),
                          text("Columns: Name, Gender, Score  (" + std::to_string(students.size()) +
                               " students)") | dim,
-                         text("Saved in the folder the program was started from.") | dim,
+                         text("Leave Folder empty to save where the program was started.") | dim,
                          text(""),
                          hbox(export_btn->Render(), text(" "), export_back->Render()),
                          text(""),
