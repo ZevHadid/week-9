@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 using namespace ftxui;
 
@@ -264,7 +265,7 @@ Element frame(const std::string& title, Element body, const std::string& hint) {
 
 // ---------------------------------------------------------------- main ----
 
-enum Page { MENU, ADD, MODIFY, REMOVE, VIEW, SEARCH, SORT, STATS };
+enum Page { MENU, ADD, MODIFY, REMOVE, VIEW, SEARCH, SORT, STATS, EXPORT };
 
 int main() {
     auto screen = ScreenInteractive::Fullscreen();
@@ -588,10 +589,80 @@ int main() {
                      "Left/Right: switch chart | Up/Down: move | Esc: back to menu");
     });
 
+        // ------------------------------------------------------ Export ------
+    std::string export_name = "students", export_status;
+    bool export_ok = true;
+    std::vector<std::string> export_formats = {"CSV (.csv)", "Excel (.xlsx)"};
+    int export_format = 0;
+
+    auto doExport = [&] {
+        if (students.empty()) {
+            export_status = "No students to export.";
+            export_ok = false;
+            return;
+        }
+        std::string base = trim(export_name);
+        if (base.empty()) {
+            export_status = "File name cannot be empty.";
+            export_ok = false;
+            return;
+        }
+
+        std::string ext = (export_format == 0) ? ".csv" : ".xlsx";
+        std::string path = base;
+        if (toLower(base).size() < ext.size() ||
+            toLower(base).compare(toLower(base).size() - ext.size(), ext.size(), ext) != 0)
+            path += ext;
+
+        std::string err;
+        bool ok = (export_format == 0) ? writeCsv(path, students, err)
+                                       : writeXlsx(path, students, err);
+        if (ok) {
+            std::error_code ec;
+            std::string full = std::filesystem::absolute(path, ec).string();
+            export_status = "Exported " + std::to_string(students.size()) + " students to " +
+                            (ec ? path : full);
+            export_ok = true;
+        } else {
+            export_status = err;
+            export_ok = false;
+        }
+    };
+
+    InputOption export_name_opt;
+    export_name_opt.on_enter = doExport;
+    auto export_name_in = Input(&export_name, "file name", export_name_opt);
+    auto export_format_in = Toggle(&export_formats, &export_format);
+    auto export_btn = Button("Export", doExport, ButtonOption::Animated());
+    auto export_back = makeBackButton();
+
+    auto export_form = Container::Vertical({
+        export_name_in,
+        export_format_in,
+        Container::Horizontal({export_btn, export_back}),
+    });
+
+    auto export_page = Renderer(export_form, [&] {
+        return frame("Export Students",
+                     vbox({
+                         hbox(text("File name: "), export_name_in->Render() | flex),
+                         hbox(text("Format:    "), export_format_in->Render()),
+                         text(""),
+                         text("Columns: Name, Gender, Score  (" + std::to_string(students.size()) +
+                              " students)") | dim,
+                         text("Saved in the folder the program was started from.") | dim,
+                         text(""),
+                         hbox(export_btn->Render(), text(" "), export_back->Render()),
+                         text(""),
+                         paragraph(export_status) | color(export_ok ? Color::Green : Color::Red),
+                     }),
+                     "Tab/arrows: move | Left/Right: change format | Enter: export | Esc: back to menu");
+    });
+
     // -------------------------------------------------------- Menu --------
     std::vector<std::string> menu_items = {"Add Student",    "Modify Student", "Remove Student",
                                            "View All",       "Search by Name", "Sort by Score",
-                                           "Statistics",     "Exit"};
+                                           "Statistics",     "Export",     "Exit"};
     int menu_selected = 0;
 
     MenuOption menu_opt = MenuOption::Vertical();
@@ -628,7 +699,13 @@ int main() {
                 stats_view = 0;
                 page = STATS;
                 break;
-            case 7: screen.Exit(); break;
+            case 7:
+                export_status.clear();
+                export_ok = true;
+                page = EXPORT;
+                export_name_in->TakeFocus();
+                break;
+            case 8: screen.Exit(); break;
         }
     };
     auto menu = Menu(&menu_items, &menu_selected, menu_opt);
@@ -642,8 +719,8 @@ int main() {
 
     // ---------------------------------------------------- Root ----------
     // Order must match the Page enum.
-    auto pages = Container::Tab({menu_page, add_page, modify_page, remove_page, view_page,
-                                 search_page, sort_page, stats_page},
+        auto pages = Container::Tab({menu_page, add_page, modify_page, remove_page, view_page,
+                                 search_page, sort_page, stats_page, export_page},
                                 &page);
 
     auto root = CatchEvent(pages, [&](Event e) {

@@ -1,3 +1,4 @@
+//helper_functions.h
 #pragma once
 
 #include <string>
@@ -21,6 +22,10 @@ extern double min_score;
 extern double max_score;
 extern double p50;
 
-// Function declarations (FIXED line 28 here)
+// Function declarations
 Student findStudentNByName(std::string name);
 std::vector<int> sortedStudentsByScore();
+
+// Export: both return false and fill `err` on failure.
+bool writeCsv(const std::string& path, const std::vector<Student>& list, std::string& err);
+bool writeXlsx(const std::string& path, const std::vector<Student>& list, std::string& err);
