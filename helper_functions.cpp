@@ -2,11 +2,14 @@
 #include "helper_functions.h"
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <numeric>
+#include <cctype>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <sstream>
 
 // Allocating memory for globals (No struct re-definitions here)
@@ -237,4 +240,222 @@ bool writeXlsx(const std::string& path, const std::vector<Student>& list, std::s
         return false;
     }
     return true;
+}
+
+// ======================================================================
+// Import (CSV + .xlsx produced by this app)
+// ======================================================================
+
+namespace {
+
+std::string xmlUnescape(const std::string& s) {
+    std::string out;
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] != '&') { out += s[i]; continue; }
+        if (s.compare(i, 5, "&amp;")  == 0) { out += '&';  i += 4; }
+        else if (s.compare(i, 4, "&lt;")  == 0) { out += '<';  i += 3; }
+        else if (s.compare(i, 4, "&gt;")  == 0) { out += '>';  i += 3; }
+        else if (s.compare(i, 6, "&quot;") == 0) { out += '"';  i += 5; }
+        else if (s.compare(i, 6, "&apos;") == 0) { out += '\''; i += 5; }
+        else out += s[i];
+    }
+    return out;
+}
+
+// Reads an entry from a STORED (method 0) zip. Our exporter only writes
+// stored entries, so we don't need a DEFLATE decoder here.
+bool extractZipEntry(const std::string& zipData, const std::string& entryName,
+                     std::string& out) {
+    size_t pos = 0;
+    auto le16 = [&](size_t p) { return (uint16_t)((uint8_t)zipData[p] |
+                                    ((uint8_t)zipData[p + 1] << 8)); };
+    auto le32 = [&](size_t p) { return (uint32_t)((uint8_t)zipData[p] |
+                                    ((uint8_t)zipData[p + 1] << 8) |
+                                    ((uint8_t)zipData[p + 2] << 16) |
+                                    ((uint8_t)zipData[p + 3] << 24)); };
+
+    while (pos + 30 <= zipData.size()) {
+        if (le32(pos) != 0x04034b50u) break;               // local file header
+        uint16_t method    = le16(pos + 8);
+        uint32_t compSize  = le32(pos + 18);
+        uint16_t nameLen   = le16(pos + 26);
+        uint16_t extraLen  = le16(pos + 28);
+        size_t   nameStart = pos + 30;
+        if (nameStart + nameLen + extraLen + compSize > zipData.size()) break;
+
+        if (zipData.compare(nameStart, nameLen, entryName) == 0) {
+            if (method != 0) return false;                 // DEFLATE unsupported
+            out.assign(zipData, nameStart + nameLen + extraLen, compSize);
+            return true;
+        }
+        pos = nameStart + nameLen + extraLen + compSize;
+    }
+    return false;
+}
+
+// Minimal xlsx reader: understands inlineStr and numeric cells, which is
+// exactly what writeXlsx emits. Row 1 is treated as a header.
+bool parseSheet(const std::string& sheet, std::vector<Student>& out, std::string& err) {
+    struct Cell { std::string val; bool isNum = false; };
+    std::map<int, std::map<int, Cell>> grid;
+
+    size_t pos = 0;
+    while ((pos = sheet.find("<c ", pos)) != std::string::npos) {
+        size_t end = sheet.find("</c>", pos);
+        if (end == std::string::npos) break;
+        size_t after = end + 4;
+        std::string cell = sheet.substr(pos, after - pos);
+
+        size_t rp = cell.find("r=\"");
+        if (rp == std::string::npos) { pos = after; continue; }
+        size_t re = cell.find('"', rp + 3);
+        std::string ref = cell.substr(rp + 3, re - rp - 3);
+
+        int col = 0, row = 0;
+        size_t i = 0;
+        while (i < ref.size() && std::isalpha((unsigned char)ref[i])) {
+            col = col * 26 + (std::toupper((unsigned char)ref[i]) - 'A' + 1); ++i;
+        }
+        --col;
+        while (i < ref.size() && std::isdigit((unsigned char)ref[i])) {
+            row = row * 10 + (ref[i] - '0'); ++i;
+        }
+
+        bool isStr = cell.find("t=\"inlineStr\"") != std::string::npos ||
+                     cell.find("t=\"str\"")       != std::string::npos;
+        Cell c;
+        if (isStr) {
+            size_t ts = cell.find("<t>");
+            if (ts != std::string::npos) {
+                size_t te = cell.find("</t>", ts);
+                if (te != std::string::npos)
+                    c.val = xmlUnescape(cell.substr(ts + 3, te - ts - 3));
+            }
+        } else {
+            size_t vs = cell.find("<v>");
+            if (vs != std::string::npos) {
+                size_t ve = cell.find("</v>", vs);
+                if (ve != std::string::npos) {
+                    c.val   = cell.substr(vs + 3, ve - vs - 3);
+                    c.isNum = true;
+                }
+            }
+        }
+        if (!c.val.empty()) grid[row][col] = c;
+        pos = after;
+    }
+
+    std::vector<Student> parsed;
+    for (auto& [row, cols] : grid) {
+        if (row == 1) continue;                            // header
+        auto get = [&](int c) -> std::string {
+            auto it = cols.find(c);
+            return it == cols.end() ? std::string() : it->second.val;
+        };
+        std::string name = get(0);
+        if (name.empty()) continue;
+        std::string gender = get(1);
+        if (gender != "Male" && gender != "Female") gender = "Male";
+        double score = 0.0;
+        try { score = std::stod(get(2)); } catch (...) { continue; }
+        parsed.push_back({name, score, gender});
+    }
+    if (parsed.empty()) { err = "No valid student rows found in worksheet."; return false; }
+    out = std::move(parsed);
+    return true;
+}
+
+}  // namespace
+
+bool readCsv(const std::string& path, std::vector<Student>& out, std::string& err) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) { err = "Could not open \"" + path + "\"."; return false; }
+    std::string content((std::istreambuf_iterator<char>(f)),
+                         std::istreambuf_iterator<char>());
+
+    // Strip UTF-8 BOM (writeCsv adds one).
+    if (content.size() >= 3 &&
+        (uint8_t)content[0] == 0xEF && (uint8_t)content[1] == 0xBB &&
+        (uint8_t)content[2] == 0xBF)
+        content.erase(0, 3);
+
+    // Split into rows/fields, honouring RFC-4180 quoting.
+    std::vector<std::vector<std::string>> rows;
+    std::vector<std::string> row;
+    std::string field;
+    bool inQuotes = false;
+    for (size_t i = 0; i < content.size(); ++i) {
+        char c = content[i];
+        if (inQuotes) {
+            if (c == '"') {
+                if (i + 1 < content.size() && content[i + 1] == '"') { field += '"'; ++i; }
+                else inQuotes = false;
+            } else field += c;
+        } else if (c == '"') {
+            inQuotes = true;
+        } else if (c == ',') {
+            row.push_back(field); field.clear();
+        } else if (c == '\r') {
+            // skip; \n handles the row break
+        } else if (c == '\n') {
+            row.push_back(field); field.clear();
+            if (!row.empty()) rows.push_back(row);
+            row.clear();
+        } else {
+            field += c;
+        }
+    }
+    if (!field.empty() || !row.empty()) {
+        row.push_back(field);
+        rows.push_back(row);
+    }
+    if (rows.empty()) { err = "File is empty."; return false; }
+
+    // Skip a header row if it exists.
+    size_t start = 0;
+    if (!rows[0].empty()) {
+        std::string first = rows[0][0];
+        for (char& c : first) c = (char)std::tolower((unsigned char)c);
+        if (first.find("name") != std::string::npos) start = 1;
+    }
+
+    std::vector<Student> parsed;
+    for (size_t r = start; r < rows.size(); ++r) {
+        const auto& rw = rows[r];
+        if (rw.size() < 3 || rw[0].empty()) continue;
+
+        std::string name = rw[0];
+        // Undo csvField's formula-injection guard.
+        if (name.size() >= 2 && name[0] == '\'' &&
+            (name[1] == '=' || name[1] == '+' || name[1] == '-' || name[1] == '@'))
+            name = name.substr(1);
+
+        std::string gender = rw[1];
+        if (gender != "Male" && gender != "Female") gender = "Male";
+
+        double score = 0.0;
+        try { score = std::stod(rw[2]); } catch (...) { continue; }
+        parsed.push_back({name, score, gender});
+    }
+
+    if (parsed.empty()) { err = "No valid student rows found."; return false; }
+    out = std::move(parsed);
+    return true;
+}
+
+bool readXlsx(const std::string& path, std::vector<Student>& out, std::string& err) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) { err = "Could not open \"" + path + "\"."; return false; }
+    std::string content((std::istreambuf_iterator<char>(f)),
+                         std::istreambuf_iterator<char>());
+
+    std::string sheet;
+    if (!extractZipEntry(content, "xl/worksheets/sheet1.xml", sheet)) {
+        err = "Could not read \"" + path +
+              "\". Only .xlsx files produced by this app's Export are supported "
+              "(Excel-saved files use compression this build can't decode — "
+              "save as CSV instead).";
+        return false;
+    }
+    return parseSheet(sheet, out, err);
 }

@@ -9,18 +9,19 @@
 // |  [FTXUI] by Arthur Sonzogni                                                |
 // |  Functional Terminal User Interface library for C++                        |
 // |  (Licensed under the [MIT License (https://github.com/blob/main/LICENSE)). |
-// |                                                                            |
 // |____________________________________________________________________________|
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 
-#include "helper_functions.h"  // Student, students, findStudentNByName, sortedStudentsByScore
+#include "helper_functions.h"  // Student, students, findStudentNByName, sortedStudentsByScore,
+                               // writeCsv, writeXlsx, readCsv, readXlsx
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
@@ -265,7 +266,7 @@ Element frame(const std::string& title, Element body, const std::string& hint) {
 
 // ---------------------------------------------------------------- main ----
 
-enum Page { MENU, ADD, MODIFY, REMOVE, VIEW, SEARCH, SORT, STATS, EXPORT };
+enum Page { MENU, ADD, MODIFY, REMOVE, VIEW, SEARCH, SORT, STATS, EXPORT, IMPORT };
 
 int main() {
     auto screen = ScreenInteractive::Fullscreen();
@@ -589,12 +590,7 @@ int main() {
                      "Left/Right: switch chart | Up/Down: move | Esc: back to menu");
     });
 
-        // ------------------------------------------------------ Export ------
-    std::string export_name = "students", export_dir, export_status;
-    bool export_ok = true;
-    std::vector<std::string> export_formats = {"CSV (.csv)", "Excel (.xlsx)"};
-    int export_format = 0;
-
+    // ---------------------------------------- shared path utilities ------
     // Removes spaces and the quotes Windows adds with "Copy as path".
     auto cleanPath = [](std::string s) {
         s = trim(s);
@@ -603,6 +599,25 @@ int main() {
             s = trim(s.substr(1, s.size() - 2));
         return s;
     };
+
+    // Expand a leading ~ to $HOME (std::filesystem does not do this).
+    auto expandTilde = [](std::string s) {
+        if (!s.empty() && s[0] == '~') {
+            const char* home = std::getenv("HOME");
+            if (home) s = std::string(home) + s.substr(1);
+        }
+        return s;
+    };
+
+    auto resolvePath = [&](const std::string& raw) {
+        return expandTilde(cleanPath(raw));
+    };
+
+    // ------------------------------------------------------ Export ------
+    std::string export_name = "students", export_dir, export_status;
+    bool export_ok = true;
+    std::vector<std::string> export_formats = {"CSV (.csv)", "Excel (.xlsx)"};
+    int export_format = 0;
 
     auto doExport = [&] {
         namespace fs = std::filesystem;
@@ -613,16 +628,7 @@ int main() {
             return;
         }
 
-        // Expand a leading ~ to $HOME (std::filesystem does not do this).
-        auto expandTilde = [](std::string s) {
-            if (!s.empty() && s[0] == '~') {
-                const char* home = std::getenv("HOME");
-                if (home) s = std::string(home) + s.substr(1);
-            }
-            return s;
-        };
-
-        std::string base = expandTilde(cleanPath(export_name));
+        std::string base = resolvePath(export_name);
         if (base.empty()) {
             export_status = "File name cannot be empty.";
             export_ok = false;
@@ -636,7 +642,7 @@ int main() {
         // If the file name field already contains an absolute path,
         // use it directly and ignore the Folder field.
         fs::path target;
-        std::string dir_text = expandTilde(cleanPath(export_dir));
+        std::string dir_text = resolvePath(export_dir);
 
         if (file.is_absolute()) {
             target = file;
@@ -667,7 +673,7 @@ int main() {
 
         std::string err;
         bool ok = (export_format == 0) ? writeCsv(target.string(), students, err)
-                                    : writeXlsx(target.string(), students, err);
+                                       : writeXlsx(target.string(), students, err);
         if (ok) {
             std::error_code ec2;
             fs::path full = fs::absolute(target, ec2);
@@ -713,10 +719,85 @@ int main() {
                      "Tab/arrows: move | Left/Right: change format | Enter: export | Esc: back to menu");
     });
 
+    // ------------------------------------------------------ Import ------
+    std::string import_path, import_status;
+    bool import_ok = true;
+    std::vector<std::string> import_modes = {"Replace all", "Append"};
+    int import_mode = 0;
+
+    auto doImport = [&] {
+        if (import_path.empty()) {
+            import_status = "Enter a file path first.";
+            import_ok = false;
+            return;
+        }
+
+        std::string resolved = resolvePath(import_path);
+        std::string lower = toLower(resolved);
+        std::string ext;
+        auto dot = lower.find_last_of('.');
+        if (dot != std::string::npos) ext = lower.substr(dot);
+
+        std::vector<Student> loaded;
+        std::string err;
+        bool ok = false;
+        if (ext == ".csv")       ok = readCsv(resolved, loaded, err);
+        else if (ext == ".xlsx") ok = readXlsx(resolved, loaded, err);
+        else {
+            import_status = "File must end in .csv or .xlsx.";
+            import_ok = false;
+            return;
+        }
+        if (!ok) { import_status = err; import_ok = false; return; }
+
+        size_t oldSize = students.size();
+        if (import_mode == 0) students = std::move(loaded);
+        else                  students.insert(students.end(), loaded.begin(), loaded.end());
+
+        std::ostringstream msg;
+        if (import_mode == 0)
+            msg << "Replaced " << oldSize << " with " << loaded.size() << " imported students.";
+        else
+            msg << "Appended " << loaded.size() << " students (total " << students.size() << ").";
+        import_status = msg.str();
+        import_ok = true;
+    };
+
+    InputOption import_opt;
+    import_opt.on_enter = doImport;
+    auto import_path_in = Input(&import_path, "/path/to/students.csv", import_opt);
+    auto import_mode_in = Toggle(&import_modes, &import_mode);
+    auto import_btn     = Button("Import", doImport, ButtonOption::Animated());
+    auto import_back    = makeBackButton();
+
+    auto import_form = Container::Vertical({
+        import_path_in,
+        import_mode_in,
+        Container::Horizontal({import_btn, import_back}),
+    });
+
+    auto import_page = Renderer(import_form, [&] {
+        return frame("Import Students",
+                     vbox({
+                         hbox(text("Path:    "), import_path_in->Render() | flex),
+                         hbox(text("Mode:    "), import_mode_in->Render()),
+                         text(""),
+                         text("Supports .csv and .xlsx (from this app's Export).") | dim,
+                         text("Columns: Name, Gender, Score  — header row optional.") | dim,
+                         text("~ is expanded to your home directory.") | dim,
+                         text(""),
+                         hbox(import_btn->Render(), text(" "), import_back->Render()),
+                         text(""),
+                         paragraph(import_status) | color(import_ok ? Color::Green : Color::Red),
+                     }),
+                     "Tab/arrows: move | Enter: import | Esc: back to menu");
+    });
+
     // -------------------------------------------------------- Menu --------
-    std::vector<std::string> menu_items = {"Add Student",    "Modify Student", "Remove Student",
-                                           "View All",       "Search by Name", "Sort by Score",
-                                           "Statistics",     "Export",     "Exit"};
+    std::vector<std::string> menu_items = {"Add Student", "Modify Student", "Remove Student",
+                                           "View All",    "Search by Name", "Sort by Score",
+                                           "Statistics",  "Export",         "Import",
+                                           "Exit"};
     int menu_selected = 0;
 
     MenuOption menu_opt = MenuOption::Vertical();
@@ -759,7 +840,13 @@ int main() {
                 page = EXPORT;
                 export_name_in->TakeFocus();
                 break;
-            case 8: screen.Exit(); break;
+            case 8:
+                import_status.clear();
+                import_ok = true;
+                page = IMPORT;
+                import_path_in->TakeFocus();
+                break;
+            case 9: screen.Exit(); break;
         }
     };
     auto menu = Menu(&menu_items, &menu_selected, menu_opt);
@@ -773,8 +860,8 @@ int main() {
 
     // ---------------------------------------------------- Root ----------
     // Order must match the Page enum.
-        auto pages = Container::Tab({menu_page, add_page, modify_page, remove_page, view_page,
-                                 search_page, sort_page, stats_page, export_page},
+    auto pages = Container::Tab({menu_page, add_page, modify_page, remove_page, view_page,
+                                 search_page, sort_page, stats_page, export_page, import_page},
                                 &page);
 
     auto root = CatchEvent(pages, [&](Event e) {

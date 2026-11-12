@@ -29,3 +29,7 @@ std::vector<int> sortedStudentsByScore();
 // Export: both return false and fill `err` on failure.
 bool writeCsv(const std::string& path, const std::vector<Student>& list, std::string& err);
 bool writeXlsx(const std::string& path, const std::vector<Student>& list, std::string& err);
+
+// Import: return false and fill `err` on failure. `out` is only modified on success.
+bool readCsv(const std::string& path, std::vector<Student>& out, std::string& err);
+bool readXlsx(const std::string& path, std::vector<Student>& out, std::string& err);
