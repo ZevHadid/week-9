@@ -1,6 +1,6 @@
 # Student Activity Record
 
-A C++17 terminal application built with [FTXUI](https://github.com).
+A C++17 terminal application built with [FTXUI](https://github.com/ArthurSonzogni/FTXUI).
 
 ## Prerequisites
 
