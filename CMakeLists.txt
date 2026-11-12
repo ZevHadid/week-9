@@ -13,10 +13,13 @@ FetchContent_Declare(
   GIT_TAG        v7.0.3
 )
 
-FetchContent_MakeAvailable(ftxui)
+FetchContent_Declare(
+  SDL2
+  GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+  GIT_TAG        release-2.30.11
+)
 
-# Find SDL2
-find_package(SDL2 REQUIRED)
+FetchContent_MakeAvailable(ftxui SDL2)
 
 add_executable(app ./student_manager.cpp ./app_core.cpp ./helper_functions.cpp ./surprise.cpp)
 
@@ -26,8 +29,3 @@ target_link_libraries(app PRIVATE
     ftxui::component
     SDL2::SDL2
 )
-
-# SDL2main is required on Windows, but will cause linker errors on Linux/macOS
-if(WIN32)
-    target_link_libraries(app PRIVATE SDL2::SDL2main)
-endif()
