@@ -612,22 +612,35 @@ int main() {
             export_ok = false;
             return;
         }
-        std::string base = cleanPath(export_name);
+
+        // Expand a leading ~ to $HOME (std::filesystem does not do this).
+        auto expandTilde = [](std::string s) {
+            if (!s.empty() && s[0] == '~') {
+                const char* home = std::getenv("HOME");
+                if (home) s = std::string(home) + s.substr(1);
+            }
+            return s;
+        };
+
+        std::string base = expandTilde(cleanPath(export_name));
         if (base.empty()) {
             export_status = "File name cannot be empty.";
             export_ok = false;
             return;
         }
 
-        // Add the extension if the name doesn't already end in it.
         std::string ext = (export_format == 0) ? ".csv" : ".xlsx";
         fs::path file(base);
         if (toLower(file.extension().string()) != ext) file += ext;
 
-        // Empty folder field = current folder (the previous behaviour).
-        std::string dir_text = cleanPath(export_dir);
-        fs::path target = file;
-        if (!dir_text.empty()) {
+        // If the file name field already contains an absolute path,
+        // use it directly and ignore the Folder field.
+        fs::path target;
+        std::string dir_text = expandTilde(cleanPath(export_dir));
+
+        if (file.is_absolute()) {
+            target = file;
+        } else if (!dir_text.empty()) {
             std::error_code ec;
             fs::path dir(dir_text);
             if (!fs::is_directory(dir, ec)) {
@@ -635,17 +648,31 @@ int main() {
                 export_ok = false;
                 return;
             }
-            target = dir / file;  // an absolute file name overrides the folder
+            target = dir / file;
+        } else {
+            target = file;
+        }
+
+        // Create the parent directory if it's missing.
+        std::error_code ec;
+        fs::path parent = target.parent_path();
+        if (!parent.empty() && !fs::exists(parent, ec)) {
+            fs::create_directories(parent, ec);
+            if (ec) {
+                export_status = "Cannot create folder \"" + parent.string() + "\": " + ec.message();
+                export_ok = false;
+                return;
+            }
         }
 
         std::string err;
         bool ok = (export_format == 0) ? writeCsv(target.string(), students, err)
-                                       : writeXlsx(target.string(), students, err);
+                                    : writeXlsx(target.string(), students, err);
         if (ok) {
-            std::error_code ec;
-            fs::path full = fs::absolute(target, ec);
+            std::error_code ec2;
+            fs::path full = fs::absolute(target, ec2);
             export_status = "Exported " + std::to_string(students.size()) + " students to " +
-                            (ec ? target.string() : full.string());
+                            (ec2 ? target.string() : full.string());
             export_ok = true;
         } else {
             export_status = err;
