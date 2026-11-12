@@ -47,3 +47,8 @@ Before building the project, make sure you have the following installed:
      .\build\Debug\app.exe
      ```
      *(Note: If you built in Release mode, look in `.\build\Release\app.exe` or `.\build\app.exe` depending on your compiler.)*
+
+### lil compilation shortcut here if you use g++
+```bash
+g++ -g -std=c++20 path/to/your/project/*.cpp -o path/to/your/project/build/app -lftxui-component -lftxui-dom -lftxui-screen
+```
