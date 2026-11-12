@@ -15,10 +15,19 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(ftxui)
 
-add_executable(app ./student_manager.cpp ./app_core.cpp ./helper_functions.cpp)
+# Find SDL2
+find_package(SDL2 REQUIRED)
+
+add_executable(app ./student_manager.cpp ./app_core.cpp ./helper_functions.cpp ./surprise.cpp)
 
 target_link_libraries(app PRIVATE
     ftxui::screen
     ftxui::dom
     ftxui::component
+    SDL2::SDL2
 )
+
+# SDL2main is required on Windows, but will cause linker errors on Linux/macOS
+if(WIN32)
+    target_link_libraries(app PRIVATE SDL2::SDL2main)
+endif()

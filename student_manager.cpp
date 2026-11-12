@@ -14,6 +14,10 @@
 #include "helper_functions.h"
 #include "app_core.h"
 
+#include "surprise.h"
+#include <cstdlib>
+#include <ctime>
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -1030,6 +1034,12 @@ int cmdShell(const std::string& file) {
         } else {
             std::cout << "Unknown command '" << cmd << "'. Type 'help'.\n";
         }
+
+        if (std::rand() % 100 < 30) {
+            std::cout << "\n[!] Wait... what's this? Opening a mysterious window...\n";
+            showSurpriseImage();
+            std::cout << "[!] Window closed. Continuing...\n\n";
+        }
     }
 
     if (core::session.dirty) {
@@ -1047,6 +1057,8 @@ int cmdShell(const std::string& file) {
 // ---------------------------------------------------------------- main ----
 
 int main(int argc, char* argv[]) {
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty()) { printUsage(); return 1; }
 

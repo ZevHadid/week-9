@@ -62,8 +62,7 @@ Before building the project, make sure you have the following installed:
 ### Compilation shortcut (g++)
 
 ```bash
-g++ -g -std=c++20 path/to/your/project/*.cpp -o path/to/your/project/build/app \
-    -lftxui-component -lftxui-dom -lftxui-screen
+g++ -g -std=c++20 path/to/project/*.cpp -o path/to/project/build/app -lftxui-component -lftxui-dom -lftxui-screen -lSDL2
 ```
 
 ## Usage
