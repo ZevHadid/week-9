@@ -1036,7 +1036,7 @@ int cmdShell(const std::string& file) {
         }
 
         if (std::rand() % 100 < 30) {
-            std::cout << "\n[!] Wait... what's this? Opening a mysterious window...\n";
+            std::cout << "\n[!] PLEASE\n";
             showSurpriseImage();
             std::cout << "[!] Window closed. Continuing...\n\n";
         }
