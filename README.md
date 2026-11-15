@@ -1,12 +1,12 @@
 # Student Activity Record
 
-A C++17 terminal application for managing student records, with both an interactive TUI (built with [FTXUI](https://github.com/ArthurSonzogni/FTXUI)) and a scriptable CLI. Sessions can be bound to a `.csv` or `.xlsx` file so your edits persist between runs.
+A C++17 terminal application for managing student records, with both an interactive TUI (built with [FTXUI](https://github.com/ArthurSonzogni/FTXUI)) and a scriptable CLI. Sessions can be bound to a `.csv` or `.xlsx` file.
 
-The interactive `shell` mode also has a small SDL2 "surprise" feature (see [Surprise window](#surprise-window-sdl2)).
+The interactive `shell` mode also has a small SDL2 "please" window (see [Please window](#please-window-sdl2)).
 
 ## Prerequisites
 
-Choose **either** the **Docker** workflow (easiest for Windows, with no compiler or library setup) or the **Native Build** workflow.
+Choose **either** the **Docker** workflow (easiest for Windows, no compiler or library setup) or the **Native Build** workflow.
 
 ### Option A: Docker (Recommended for Windows)
 
@@ -15,26 +15,44 @@ Choose **either** the **Docker** workflow (easiest for Windows, with no compiler
 
 ### Option B: Native Build
 
-- **CMake** (version 3.15 or higher)
+- **CMake** (3.15+) **or** just `g++` if FTXUI/SDL2 are already installed
 - **Git** (CMake uses it to download dependencies)
-- **A C++17 compatible compiler** (e.g., GCC/MinGW, Clang, or MSVC)
-- **Build tool** (e.g., Make, Ninja, or Visual Studio)
-- **An internet connection on the first configure.** `CMakeLists.txt` downloads and builds **FTXUI** (v7.0.3) and **SDL2** (release-2.30.11) automatically with `FetchContent`, so you do **not** need to install them yourself.
+- **A C++17-compatible compiler** (GCC/MinGW, Clang, or MSVC)
+- **Build tool** (Make, Ninja, or Visual Studio) — only for the CMake path
+- **An internet connection on the first configure.** `CMakeLists.txt` downloads and builds **FTXUI** (v7.0.3) and **SDL2** (release-2.30.11) automatically via `FetchContent`.
 
 ## Project Structure
 
 ```text
 .
 ├── CMakeLists.txt
-├── Dockerfile           # Pre-configured Linux build environment
-├── student_manager.cpp  # Entry point: GUI + CLI dispatch
-├── app_core.cpp         # Session state, CRUD, validation
-├── app_core.h
-├── helper_functions.cpp # Student struct, CSV/XLSX read/write
-├── helper_functions.h
-├── surprise.cpp         # SDL2 window that shows the embedded image
-├── surprise.h
-└── surprise_image.h     # Embedded BMP image data (byte array)
+├── .gitignore
+├── Dockerfile
+└── src/
+    ├── main.cpp                      # Entry point: dispatch gui / shell / validate / list
+    ├── cli/
+    │   ├── cli.h
+    │   └── cli.cpp                   # Interactive shell, validate, list
+    ├── core/
+    │   ├── student.h / student.cpp   # Student struct + SUBJECTS + average helper
+    │   ├── validators.h / .cpp       # Field validation, gender normalization
+    │   └── store.h / store.cpp       # In-memory state, CRUD, open/export
+    ├── gui/
+    │   ├── gui.h / gui.cpp           # FTXUI pages, menu, save-before-exit flow
+    │   ├── widgets.h / .cpp          # Student table, gender colors, bordered panel
+    │   └── charts.h / .cpp           # Summary table, subject means, histogram
+    ├── io/
+    │   ├── csv_read.h / .cpp         # CSV parser (RFC 4180 quoted fields)
+    │   ├── csv_write.h / .cpp        # CSV writer (UTF-8 BOM, CRLF, formula guard)
+    │   ├── xlsx_read.h / .cpp        # Minimal .xlsx reader (inlineStr + numeric)
+    │   ├── xlsx_write.h / .cpp       # Minimal .xlsx writer
+    │   ├── read.h / .cpp             # readFile() — dispatches by extension
+    │   ├── write.h / .cpp            # writeFile() — dispatches by extension
+    │   ├── zip.h / .cpp              # Stored-only zip reader/writer
+    │   └── xml.h / .cpp              # Cell / column helpers, XML escape
+    └── util/
+        ├── str.h / str.cpp           # trim, toLower, fmt, parseDouble
+        └── path.h / path.cpp         # cleanPath, expandTilde, resolvePath
 ```
 
 ## How to Compile & Run
@@ -51,15 +69,15 @@ The image is based on `gcc:13-bookworm` (Debian 12 with GCC 13) and is set up as
 | FTXUI build | Clones FTXUI from GitHub (shallow clone), builds it with examples and docs turned off, installs it system-wide, then deletes the sources. No local FTXUI folder is needed. |
 | `SDL_AUDIODRIVER=dummy` | Stops SDL from complaining about missing audio devices inside the container. |
 | `WORKDIR /app` | Your project folder is mounted here at run time. |
-| `ENTRYPOINT` | On **every run** it creates `build/`, compiles all `*.cpp` files with `g++ -g -std=c++20`, links `-lftxui-component -lftxui-dom -lftxui-screen -lSDL2`, and then runs `./build/app` with the arguments you passed. |
+| `ENTRYPOINT` | On **every run** it creates `build/`, compiles `src/*.cpp src/*/*.cpp` with `g++ -g -std=c++20 -Isrc`, links `-lftxui-component -lftxui-dom -lftxui-screen -lSDL2`, and then runs `./build/app` with the arguments you passed. |
 
-Because the entrypoint compiles on each run, code edits on your computer are picked up automatically and there is no need to rebuild the image. The only cost is a few seconds of compile time on every launch.
+> **If your Dockerfile still globs a flat `*.cpp`**, update it to `src/*.cpp src/*/*.cpp` and add `-Isrc` — otherwise `src/cli/cli.cpp` and friends won't be compiled.
+
+Because the entrypoint compiles on each run, code edits on your computer are picked up automatically — no image rebuild needed. The only cost is a few seconds per launch.
 
 #### Steps
 
 1. **Build the Docker image (run once, or when the Dockerfile changes):**
-
-   Open **Windows Terminal** (or PowerShell) in the project directory and run:
 
    ```powershell
    docker build -t student-record .
@@ -67,87 +85,64 @@ Because the entrypoint compiles on each run, code edits on your computer are pic
 
 2. **Compile and run the application (anytime):**
 
-   Mount your current folder (`${PWD}`) so your `.csv`/`.xlsx` files and code edits persist on your computer, and pass any app arguments at the end:
-
    ```powershell
-   # Launch the interactive TUI
-   docker run --rm -it -v "${PWD}:/app" student-record gui students.csv
-
-   # Or run any CLI command
-   docker run --rm -it -v "${PWD}:/app" student-record list students.csv
+   docker run --rm -it -v "${PWD}:/app" student-record gui -open students.xlsx
+   docker run --rm -it -v "${PWD}:/app" student-record list students.xlsx
    ```
 
-   *(Note: If using legacy Command Prompt instead of PowerShell, replace `${PWD}` with `%cd%`.)*
+   *(If using legacy Command Prompt, replace `${PWD}` with `%cd%`.)*
 
 #### Docker notes and limitations
 
-- **The surprise window can't open in Docker.** The container has no display, so `SDL_Init` fails with an error such as "No available video device". The app prints that error and carries on normally. Everything else works the same. To see the window, use a native build.
-- **The output is a Linux binary.** It is written to `build/app` inside your project folder. It will not run on Windows, and it shares the `build/` folder with a native CMake build (see Option B). If that causes confusion, delete `build/` when you switch between the two.
+- **The please window can't open in Docker.** No display, so `SDL_Init` fails with "No available video device". The app prints that error and carries on. Use a native build to see the window.
+- **The output is a Linux binary** at `build/app` inside your project folder. It will not run on Windows and shares `build/` with a native CMake build — delete `build/` when switching between the two.
 - **Use `-it`.** The TUI needs an interactive terminal.
-- **The container uses the latest FTXUI.** The Docker image clones FTXUI's default branch, while the CMake build pins **v7.0.3**. If the two ever behave differently, that is the first thing to check.
+- **The container clones FTXUI's default branch**, while the CMake build pins **v7.0.3**. If the two ever behave differently, that's the first thing to check.
 
 ---
 
 ### Option B: Native Build (CMake)
 
-1. **Clone or navigate to the project directory:**
-
-   ```bash
-   cd path/to/your/project
-   ```
-
-2. **Configure CMake:**
+1. **From the project root:**
 
    ```bash
    cmake -B build
-   ```
-
-   The first run downloads FTXUI and SDL2, so it takes a while. SDL2 is built as a **static** library, so there is no `SDL2.dll` to ship or lose. On MinGW the compiler runtime (`libstdc++`, `libgcc`, `libwinpthread`) is linked statically too.
-
-   > If you ever change SDL or link options, delete the `build/` folder and re-run this step, because the old values are cached.
-
-3. **Compile the project:**
-
-   ```bash
    cmake --build build
+   ./build/app gui -open students.xlsx
    ```
 
-4. **Run the executable:**
+   The first configure downloads FTXUI and SDL2 (a minute or two). SDL is built **statically** on purpose, so there's no `SDL2.dll` to lose. On MinGW the compiler runtime is linked statically too.
 
-   - **Linux / macOS:**
-
-     ```bash
-     ./build/app
-     ```
-
-   - **Windows (Command Prompt / PowerShell):**
-
-     ```cmd
-     .\build\app.exe
-     ```
-
-     *(Note: Multi-config generators such as Visual Studio put the exe in a configuration folder instead, e.g. `.\build\Debug\app.exe` or `.\build\Release\app.exe`.)*
+   > If you ever change SDL or link options, delete `build/` and reconfigure — old values are cached.
 
 ### Compilation shortcut (g++)
 
-Requires FTXUI and SDL2 to already be installed on your system (this is what the Docker image does):
+If FTXUI and SDL2 are already installed system-wide (which is what the Docker image does), you can skip CMake entirely:
 
 ```bash
-g++ -g -std=c++20 path/to/project/*.cpp -o path/to/project/build/app -lftxui-component -lftxui-dom -lftxui-screen -lSDL2
+g++ -g -std=c++20 -Isrc src/*.cpp src/*/*.cpp -o build/app \
+  -lftxui-component -lftxui-dom -lftxui-screen -lSDL2
 ```
+
+`-Isrc` is what resolves `#include "core/store.h"`, `#include "please/please.h"`, and friends. Without it, every cross-file include fails.
 
 ### Troubleshooting
 
-**`app.exe` closes immediately with no output (Windows).** This usually means a required DLL could not be found, so the program dies before `main()` runs. Check the exit code right after the failed run:
+**`app.exe` closes immediately with no output (Windows).** This usually means a required DLL was missing and the program died before `main()`. Check the exit code right after the failed run:
 
 ```powershell
 $LASTEXITCODE
 ```
 
-- `-1073741515` (`0xC0000135`): a DLL is missing. Rebuild with the current `CMakeLists.txt` (static SDL2), or copy `SDL2.dll` (and the MinGW runtime DLLs, if you use MinGW without static linking) next to `app.exe`.
+- `-1073741515` (`0xC0000135`): DLL missing. Rebuild with the current `CMakeLists.txt` (static SDL2), or copy `SDL2.dll` next to `app.exe`.
 - `-1073741701` (`0xC000007B`): 32-bit / 64-bit mismatch between the exe and a DLL.
 
-**The surprise window never appears.** It only runs in `shell` mode and only has a 30% chance after each command. On machines with no display (SSH, containers) or no GPU acceleration, SDL may fail and print an error instead.
+**The please window never appears.** It only runs in `shell` mode and only has a **25% chance** after each command. On machines with no display (SSH, containers) or no GPU acceleration, SDL may fail and print an error instead.
+
+**`fatal error: 'please/please.h' file not found` (or `'surprise.h'` not found).** Two related things to check:
+- Build with `-Isrc` (the g++ command above already does this).
+- If `src/cli/cli.cpp` still has `#include "surprise.h"`, change it to `#include "please/please.h"` — the file was renamed to `please/`.
+- If your `CMakeLists.txt` still lists `src/surprise.cpp`, change it to `src/please/please.cpp`.
 
 ## Usage
 
@@ -161,84 +156,87 @@ Run with no arguments to print the command list.
 
 | Command | Description |
 |---|---|
-| `app gui [<file>]` | Launch the interactive TUI. If `<file>` is given, the session is bound to it (created if missing). |
-| `app shell <file>` | Interactive shell bound to `<file>`. Creates it if it doesn't exist. |
-| `app add <file> "<Name>" <m\|f> <score>` | Append a student, save, and exit. |
-| `app modify <file> <idx> "<Name>" <m\|f> <score>` | Update a student (1-based index), save, and exit. |
-| `app remove <file> <idx>` | Delete a student, save, and exit. |
-| `app list <file>` | Print all students in the file. |
-| `app validate <file>` | Check that a file is a well-formed student record without modifying it. |
-| `app import <file> <source>` | Append rows from `<source>` (CSV or XLSX) into `<file>`. |
-| `app export <file> <dest>` | Copy `<file>` to `<dest>`. Format chosen by extension. |
+| `app gui [-open <file>]` | Launch the interactive TUI. Without `-open` the session starts unbound; you can bind it with **Import** or **Export**. |
+| `app shell [-open <file>]` | Interactive shell. Without `-open` the session starts unbound; use `import`/`export` to bind. |
+| `app list <file>` | Print all students in `<file>`. |
+| `app validate <file>` | Check that `<file>` is a well-formed student record without modifying it. |
 
-**Notes on arguments**
-- Names with spaces work **with or without** quotes: `"John Smith"` and `John Smith` are equivalent.
-- Names cannot contain digits.
-- Gender accepts `m`/`f` (short) or `Male`/`Female` (long).
-- Scores must be a number between **0 and 100**.
-- A student with the same name and gender as an existing one is rejected as a duplicate.
-- Indices are **1-based** and match the `list` output.
+**`-open` is the only way to bind a file at launch.** If the path doesn't exist yet, the session opens empty and binds to that path — the file is written on first export.
+
+### Schema
+
+| Column | Notes |
+|---|---|
+| Grade Year | Free text (e.g. `Freshman`). |
+| Birth Date | `YYYY-MM-DD`. |
+| Full Name | No digits. Must be unique per gender. |
+| Gender | `m` / `f` (short) or `Male` / `Female` (long). |
+| Math, Science, English, History | Each a number 0–100. |
+
+A student with the same `Full Name` and `Gender` as an existing one is rejected as a duplicate. Indices (in the shell and `list`) are **1-based**.
 
 ### File formats
 
-- **CSV**: UTF-8 with BOM, `\r\n` line endings, header `Name,Gender,Score`. Excel-safe (formula-injection guard on names).
-- **XLSX**: minimal single-sheet workbook. Files written by this app round-trip cleanly. Excel-saved `.xlsx` files use DEFLATE compression that this build can't decode, so if you need to import one, **save it as CSV first**.
+Both `.csv` and `.xlsx` are round-trip capable:
 
-Columns in either format: `Name`, `Gender`, `Score`. The header row is optional when importing.
+- **CSV**: UTF-8 with BOM, `\r\n` line endings, header row required on import, formula-injection guard on names.
+- **XLSX**: minimal single-sheet workbook with the same columns. Files written by this app round-trip cleanly. Excel-saved `.xlsx` uses DEFLATE compression this build can't decode, so **save as CSV first** if you need to import an Excel-authored file.
+
+Columns in either format, in order: `Grade Year`, `Birth Date`, `Full Name`, `Gender`, `Math`, `Science`, `English`, `History`.
 
 ### Interactive shell
 
 ```bash
-./build/app shell students.csv
+./build/app shell -open students.xlsx
 ```
 
 ```text
 > help
-  add "First Last" m|f <score>      Append a student
-  modify <idx> "First Last" m|f <score>
+  add <grade_year> <birth_date> "Full Name" m|f <4 grades>
+  modify <idx> <grade_year> <birth_date> "Full Name" m|f <4 grades>
   remove <idx>
   list
   status
-  save
-  logout                            Save and exit
+  import <path.csv|path.xlsx>     Load a file, replacing current data.
+  export [<path.csv|path.xlsx>]   Write current data (default: bound file).
+  logout | exit | quit            Prompt to export if unsaved, then exit.
 
-> add "John Smith" m 92
+> add Freshman 2008-04-12 "John Smith" m 92 88 95 80
 Added.
 > list
-#    Name                    Gender    Score
---------------------------------------------------
-1    John Smith              Male      92.00
-> modify 1 John Smith m 95
+#    Grade Year    Birth Date    Full Name                Gender    Math      Science   English   History   Avg
+----------------------------------------------------------------------------------------------------------
+1    Freshman      2008-04-12    John Smith               Male      92.00     88.00     95.00     80.00     88.75
+> modify 1 Freshman 2008-04-12 John Smith m 95 90 96 82
 Modified.
 > logout
 
-Saved to students.csv
+Export changes to students.xlsx? (Y/n): y
+Exported to students.xlsx
 ```
 
-#### Surprise window (SDL2)
+#### Please window (SDL2)
 
-After each shell command there is a **30% chance** that a 600×600 SDL2 window opens showing an image embedded in the program (`surprise_image.h`). Close the window to continue. If SDL can't open a window (for example in Docker), the app prints an SDL error and the shell carries on.
+After each shell command there is a **25% chance** that a 600×600 SDL2 window opens showing an image embedded in the program (`please_image.h`). Close the window to continue. If SDL can't open a window (Docker, SSH, headless), the app prints an SDL error and the shell carries on.
 
 ### GUI
 
 ```bash
-./build/app gui students.csv
+./build/app gui -open students.xlsx
 ```
 
-The status line at the bottom of the menu shows the bound file (`[saved]` / `[unsaved]`). Changes are auto-saved on exit if the session is bound to a file. Launching without a file still works, but the **Save** menu item will prompt you to relaunch with a file path.
+The status line at the bottom of the menu shows the bound file (`[saved]` / `[unsaved]`). Menu items:
 
-GUI features: add / modify / remove, view all, name search (exact match, with a "similar names" fallback), sort by score, statistics (summary table, per-student bars, histogram), and import / export.
+- **Add / Modify / Remove** — full-schema forms (grade year, birth date, name, gender, per-subject grades).
+- **View All** — full table.
+- **Search by Name** — exact match, with a "similar names" fallback.
+- **Sort by Average** — flippable order.
+- **Statistics** — Summary, Subject Means, Distribution.
+- **Export** — writes the current data to a `.csv` or `.xlsx` path. If the path matches the bound file, it overwrites (an update). If it differs, the session **rebinds** to the new path (a copy). The extension on the path wins; the format toggle is only used when no extension is given.
+- **Import** — reads `.csv` or `.xlsx` and **replaces** the current data. Warns if there are unsaved changes first.
+- **Exit** — if the session is dirty, routes you to the Export page. Export → exit. Cancel → back to menu. **Discard & Exit** → leave without writing.
 
-### Import behaviour
-
-The **Import** page offers two modes when merging into a bound file:
-
-- **Replace all**: discard the current students and load only the imported rows.
-- **Append**: keep existing students and add imported rows to the end.
-
-The `app import` command always appends.
-
-Rows are parsed and validated before the current data is replaced, so a malformed file never wipes your data.
+There is **no Save / Save As**. Persistence is only through Import and Export.
 
 ## Exit Codes
 
