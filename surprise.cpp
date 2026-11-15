@@ -15,6 +15,13 @@ void showSurpriseImage() {
     if (!window) { SDL_Quit(); return; }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+        if (!renderer) {
+            std::cerr << "Renderer Error: " << SDL_GetError() << "\n";
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+            return;
+    }
     
     // Load the image from the embedded binary array
     SDL_RWops* rw = SDL_RWFromConstMem(surprise_bmp, surprise_bmp_len);
