@@ -17,4 +17,4 @@ ENV SDL_AUDIODRIVER=dummy
 WORKDIR /app
 
 # Compile your code on run and forward CLI arguments
-ENTRYPOINT ["sh", "-c", "mkdir -p build && g++ -g -std=c++20 *.cpp -o build/app -lftxui-component -lftxui-dom -lftxui-screen -lSDL2 && ./build/app \"$@\"", "--"]
+ENTRYPOINT ["sh", "-c", "mkdir -p build && g++ -g -std=c++20 -Isrc src/*.cpp src/*/*.cpp -o build/app -lftxui-component -lftxui-dom -lftxui-screen -lSDL2 && ./build/app \"$@\"", "--"]
