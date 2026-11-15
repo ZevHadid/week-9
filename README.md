@@ -1,6 +1,6 @@
 # Student Activity Record
 
-A C++17 terminal application for managing student records, with both an interactive TUI (built with [FTXUI](https://github.com/ArthurSonzogni/FTXUI)) and a scriptable CLI. Sessions can be bound to a `.csv` or `.xlsx` file so your edits persist between runs.
+A C++17 terminal application for managing student records, with both an interactive TUI (built with [FTXUI](https://github.com)) and a scriptable CLI. Sessions can be bound to a `.csv` or `.xlsx` file so your edits persist between runs.
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ Choose **either** the **Docker** workflow (easiest for Windows—no compiler or 
 - **CMake** (version 3.15 or higher)
 - **A C++17 compatible compiler** (e.g., GCC, Clang, or MSVC)
 - **Build tool** (e.g., Make, Ninja, or Visual Studio)
-- **SDL2** development libraries (`libsdl2-dev`)
+- **FTXUI** and **SDL2** development libraries (`libsdl2-dev`)
 
 ## Project Structure
 
@@ -22,7 +22,6 @@ Choose **either** the **Docker** workflow (easiest for Windows—no compiler or 
 .
 ├── CMakeLists.txt
 ├── Dockerfile           # Pre-configured Linux build environment
-├── FTXUI-main/          # Bundled FTXUI library dependency
 ├── student_manager.cpp  # Entry point: GUI + CLI dispatch
 ├── app_core.cpp         # Session state, CRUD, validation
 ├── app_core.h
@@ -34,32 +33,7 @@ Choose **either** the **Docker** workflow (easiest for Windows—no compiler or 
 
 ### Option A: Using Docker (Windows / Cross-Platform)
 
-1. **Create a `Dockerfile` in the project root** with the following content:
-
-   ```dockerfile
-   FROM gcc:13-bookworm
-
-   RUN apt-get update && apt-get install -y \
-       cmake \
-       libsdl2-dev \
-       && rm -rf /var/lib/apt/lists/*
-
-   WORKDIR /app
-   COPY . .
-
-   # Build bundled FTXUI once into the image
-   RUN cmake -S FTXUI-main -B /tmp/ftxui-build -DFTXUI_BUILD_EXAMPLES=OFF -DFTXUI_BUILD_DOCS=OFF && \
-       cmake --build /tmp/ftxui-build -j$(nproc) && \
-       cmake --install /tmp/ftxui-build && \
-       rm -rf /tmp/ftxui-build
-
-   ENV SDL_AUDIODRIVER=dummy
-
-   # Compile local code on run and forward any CLI arguments to ./build/app
-   ENTRYPOINT ["sh", "-c", "mkdir -p build && g++ -g -std=c++20 *.cpp -o build/app -lftxui-component -lftxui-dom -lftxui-screen -lSDL2 && ./build/app \"$@\"", "--"]
-   ```
-
-2. **Build the Docker image (run once):**
+1. **Build the Docker image (run once):**
 
    Open **Windows Terminal** (or PowerShell) in the project directory and run:
 
@@ -67,7 +41,7 @@ Choose **either** the **Docker** workflow (easiest for Windows—no compiler or 
    docker build -t student-record .
    ```
 
-3. **Compile and run the application (anytime):**
+2. **Compile and run the application (anytime):**
 
    Mount your current folder (`${PWD}`) so your `.csv`/`.xlsx` files and code edits persist on your computer, and pass any app arguments at the end:
 

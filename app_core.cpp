@@ -14,37 +14,47 @@ Session session;
 
 namespace {
 
-std::string toLower(std::string s) {
-    for (char& c : s) c = (char)std::tolower((unsigned char)c);
-    return s;
-}
+    std::string toLower(std::string s) {
+        for (char& c : s) c = (char)std::tolower((unsigned char)c);
+        return s;
+    }
 
-std::string trim(const std::string& s) {
-    size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos) return "";
-    size_t b = s.find_last_not_of(" \t\r\n");
-    return s.substr(a, b - a + 1);
-}
+    std::string trim(const std::string& s) {
+        size_t a = s.find_first_not_of(" \t\r\n");
+        if (a == std::string::npos) return "";
+        size_t b = s.find_last_not_of(" \t\r\n");
+        return s.substr(a, b - a + 1);
+    }
 
-bool isGender(const std::string& s) { return s == "Male" || s == "Female"; }
+    bool isGender(const std::string& s) { return s == "Male" || s == "Female"; }
 
-bool validateName(const std::string& n, std::string& err) {
-    if (trim(n).empty()) { err = "Name cannot be empty."; return false; }
-    if (std::any_of(n.begin(), n.end(),
-                    [](unsigned char c) { return std::isdigit(c); })) {
-        err = "Numbers are not allowed in names.";
+    bool validateName(const std::string& n, std::string& err) {
+        if (trim(n).empty()) { err = "Name cannot be empty."; return false; }
+        if (std::any_of(n.begin(), n.end(),
+                        [](unsigned char c) { return std::isdigit(c); })) {
+            err = "Numbers are not allowed in names.";
+            return false;
+        }
+        return true;
+    }
+
+    bool validateScore(double s, std::string& err) {
+        if (!std::isfinite(s) || s < 0.0 || s > 100.0) {
+            err = "Score must be between 0 and 100.";
+            return false;
+        }
+        return true;
+    }
+
+    bool duplicateStudent(const std::string& name, const std::string& gender, std::string& err) {
+        for (const auto& student : students) {
+            if (student.name == name && student.gender == gender) {
+                err = "A student with that name and gender already exists.";
+                return true;
+            }
+        }
         return false;
     }
-    return true;
-}
-
-bool validateScore(double s, std::string& err) {
-    if (!std::isfinite(s) || s < 0.0 || s > 100.0) {
-        err = "Score must be between 0 and 100.";
-        return false;
-    }
-    return true;
-}
 
 } // namespace
 
@@ -147,6 +157,8 @@ bool addStudent(const std::string& name, const std::string& gender,
     std::string g = normalizeGender(gender);
     if (g.empty()) { err = "Gender must be m or f."; return false; }
     if (!validateScore(score, err)) return false;
+    if (duplicateStudent(name, g, err)) return false;
+
     students.push_back({trim(name), score, g});
     session.dirty = true;
     return true;
@@ -159,6 +171,9 @@ bool modifyStudent(size_t index, const std::string& name,
     std::string g = normalizeGender(gender);
     if (g.empty()) { err = "Gender must be m or f."; return false; }
     if (!validateScore(score, err)) return false;
+    if (duplicateStudent(name, g, err) && !(students[index].name == name && students[index].gender == g))
+        return false;
+    
     students[index] = {trim(name), score, g};
     session.dirty = true;
     return true;
