@@ -347,7 +347,7 @@ bool parseSheet(const std::string& sheet, std::vector<Student>& out, std::string
 
     std::vector<Student> parsed;
     for (auto& [row, cols] : grid) {
-        if (row == 1) continue;                            // header
+        if (row == 1) continue;
         auto get = [&](int c) -> std::string {
             auto it = cols.find(c);
             return it == cols.end() ? std::string() : it->second.val;
@@ -438,7 +438,6 @@ bool readCsv(const std::string& path, std::vector<Student>& out, std::string& er
         parsed.push_back({name, score, gender});
     }
 
-    if (parsed.empty()) { err = "No valid student rows found."; return false; }
     out = std::move(parsed);
     return true;
 }
