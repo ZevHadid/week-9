@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(my_app LANGUAGES CXX)
+project(student_records LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,7 +19,6 @@ FetchContent_Declare(
   GIT_TAG        release-2.30.11
 )
 
-# Build SDL as a static library so there is no SDL2.dll to go missing.
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON  CACHE BOOL "" FORCE)
 set(SDL_TEST   OFF CACHE BOOL "" FORCE)
@@ -27,14 +26,29 @@ set(SDL_TEST   OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ftxui SDL2)
 
 add_executable(app
-  student_manager.cpp
-  app_core.cpp
-  helper_functions.cpp
-  surprise.cpp
+  src/main.cpp
+  src/please/please.cpp
+  src/cli/cli.cpp
+  src/gui/gui.cpp
+  src/gui/widgets.cpp
+  src/gui/charts.cpp
+  src/core/student.cpp
+  src/core/validators.cpp
+  src/core/store.cpp
+  src/io/csv_read.cpp
+  src/io/csv_write.cpp
+  src/io/read.cpp
+  src/io/write.cpp
+  src/io/xlsx_read.cpp
+  src/io/xlsx_write.cpp
+  src/io/zip.cpp
+  src/io/xml.cpp
+  src/util/str.cpp
+  src/util/path.cpp
 )
 
-# Static-only SDL exposes SDL2::SDL2-static; fall back to SDL2::SDL2 if not.
-# SDL2main is deliberately not linked, since the app uses a standard int main().
+target_include_directories(app PRIVATE src)
+
 if(TARGET SDL2::SDL2-static)
   set(APP_SDL_TARGET SDL2::SDL2-static)
 else()
@@ -48,12 +62,10 @@ target_link_libraries(app PRIVATE
   ${APP_SDL_TARGET}
 )
 
-# MinGW: bake the compiler runtime into the exe (no libstdc++-6.dll etc.).
 if(MINGW)
   target_link_options(app PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 
-# Safety net: if SDL ever ends up shared, copy the DLL next to the exe.
 if(TARGET SDL2::SDL2 AND NOT APP_SDL_TARGET STREQUAL "SDL2::SDL2-static")
   add_custom_command(TARGET app POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
