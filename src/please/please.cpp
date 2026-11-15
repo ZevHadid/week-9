@@ -1,17 +1,17 @@
-// surprise.cpp
-#include "surprise.h"
-#include "surprise_image.h"
+// please.cpp
+#include "please.h"
+#include "please_image.h"
 #include <SDL2/SDL.h>
 #include <iostream>
 
-void showSurpriseImage() {
+void showPleaseImage() {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL Init Error: " << SDL_GetError() << "\n";
         return;
     }
 
     // Create a window (change 600, 600 to whatever size you want)
-    SDL_Window* window = SDL_CreateWindow("SURPRISE!", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 600, 600, SDL_WINDOW_SHOWN);
+    SDL_Window* window = SDL_CreateWindow("please!", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 600, 600, SDL_WINDOW_SHOWN);
     if (!window) { SDL_Quit(); return; }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
@@ -24,7 +24,7 @@ void showSurpriseImage() {
     }
     
     // Load the image from the embedded binary array
-    SDL_RWops* rw = SDL_RWFromConstMem(surprise_bmp, surprise_bmp_len);
+    SDL_RWops* rw = SDL_RWFromConstMem(please_bmp, please_bmp_len);
     SDL_Surface* surface = SDL_LoadBMP_RW(rw, 1);
     
     if (!surface) {
