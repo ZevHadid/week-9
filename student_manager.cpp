@@ -1035,7 +1035,7 @@ int cmdShell(const std::string& file) {
             std::cout << "Unknown command '" << cmd << "'. Type 'help'.\n";
         }
 
-        if (std::rand() % 100 < 30) {
+        if (std::rand() % 100 < 25) {
             std::cout << "\n[!] PLEASE\n";
             showSurpriseImage();
             std::cout << "[!] Window closed. Continuing...\n\n";
