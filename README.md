@@ -2,8 +2,6 @@
 
 A C++17 terminal application for managing student records, with both an interactive TUI (built with [FTXUI](https://github.com/ArthurSonzogni/FTXUI)) and a scriptable CLI. Sessions can be bound to a `.csv` or `.xlsx` file.
 
-The interactive `shell` mode also has a small SDL2 "please" window (see [Please window](#please-window-sdl2)).
-
 ## Prerequisites
 
 Choose **either** the **Docker** workflow (easiest for Windows, no compiler or library setup) or the **Native Build** workflow.
@@ -214,11 +212,6 @@ Modified.
 Export changes to students.xlsx? (Y/n): y
 Exported to students.xlsx
 ```
-
-#### Please window (SDL2)
-
-After each shell command there is a **25% chance** that a 600×600 SDL2 window opens showing an image embedded in the program (`please_image.h`). Close the window to continue. If SDL can't open a window (Docker, SSH, headless), the app prints an SDL error and the shell carries on.
-
 ### GUI
 
 ```bash
