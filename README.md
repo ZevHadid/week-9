@@ -92,7 +92,7 @@ Because the entrypoint compiles on each run, code edits on your computer are pic
 
 #### Docker notes and limitations
 
-- **The please window can't open in Docker.** No display, so `SDL_Init` fails with "No available video device". The app prints that error and carries on. Use a native build to see the window.
+- **The  window can't open in Docker.** No display, so `SDL_Init` fails with "No available video device". The app prints that error and carries on. Use a native build to see the window.
 - **The output is a Linux binary** at `build/app` inside your project folder. It will not run on Windows and shares `build/` with a native CMake build — delete `build/` when switching between the two.
 - **Use `-it`.** The TUI needs an interactive terminal.
 - **The container clones FTXUI's default branch**, while the CMake build pins **v7.0.3**. If the two ever behave differently, that's the first thing to check.
@@ -122,8 +122,6 @@ g++ -g -std=c++20 -Isrc src/*.cpp src/*/*.cpp -o build/app \
   -lftxui-component -lftxui-dom -lftxui-screen -lSDL2
 ```
 
-`-Isrc` is what resolves `#include "core/store.h"`, `#include "please/please.h"`, and friends. Without it, every cross-file include fails.
-
 ### Troubleshooting
 
 **`app.exe` closes immediately with no output (Windows).** This usually means a required DLL was missing and the program died before `main()`. Check the exit code right after the failed run:
@@ -134,13 +132,6 @@ $LASTEXITCODE
 
 - `-1073741515` (`0xC0000135`): DLL missing. Rebuild with the current `CMakeLists.txt` (static SDL2), or copy `SDL2.dll` next to `app.exe`.
 - `-1073741701` (`0xC000007B`): 32-bit / 64-bit mismatch between the exe and a DLL.
-
-**The please window never appears.** It only runs in `shell` mode and only has a **25% chance** after each command. On machines with no display (SSH, containers) or no GPU acceleration, SDL may fail and print an error instead.
-
-**`fatal error: 'please/please.h' file not found` (or `'surprise.h'` not found).** Two related things to check:
-- Build with `-Isrc` (the g++ command above already does this).
-- If `src/cli/cli.cpp` still has `#include "surprise.h"`, change it to `#include "please/please.h"` — the file was renamed to `please/`.
-- If your `CMakeLists.txt` still lists `src/surprise.cpp`, change it to `src/please/please.cpp`.
 
 ## Usage
 
